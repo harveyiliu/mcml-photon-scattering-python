@@ -66,7 +66,7 @@ class LayerStruct:
             self.numLayers = 2  # number of layers
             self.layer = [Medium('AIR'), Medium('TYPE_II_EPIDERMIS'), \
                 Medium('DERMIS'), Medium('DERMIS')]
-            self.layerThickness = [0.006, 0.3]  # layer thickness [cm]           
+            self.layerThickness = [0.006, 0.3]    # in [cm]
         else:
             self.numLayers = 1
             self.layer = [Medium('AIR'), Medium('DERMIS'), Medium('DERMIS')]
@@ -96,6 +96,20 @@ class LayerStruct:
             else:
                 cosCrit1 = 0.0
             self.cosCrit.append([cosCrit0, cosCrit1])
+
+    def calc_r_specular(self):
+        # direct reflections from the 1st and 2nd layers.
+        temp =(self.layer[0].n - self.layer[1].n)/(self.layer[0].n + \
+            self.layer[1].n)
+        r1 = temp*temp
+  
+        if ((self.layer[1].mua == 0.0) and (self.layer[1].mus == 0.0)):
+            # glass layer.
+            temp = (self.layer[1].n - self.layer[2].n)/(self.layer[1].n + \
+                self.layer[2].n)
+            r2 = temp*temp
+            r1 = r1 + (1 - r1)*(1 - r1)*r2/(1 - r1*r2) 
+        return r1
 
 
 class ModelInput:
@@ -178,7 +192,13 @@ class MCMLModel(ModelInput):
         self.A_l = np.zeros(2 + self.layerObj.numLayers)
         self.Tt_ra = np.matrix(np.zeros((self.nr, self.na)))
         self.Tt_r = np.zeros(self.nr)
-        self.Tt_a = np.zeros(self.na)          
+        self.Tt_a = np.zeros(self.na)
+
+    def do_one_run(self):
+        rSpecular = self.layerObj.calc_r_specular()
+        for i in range(self.numPhotons):
+            photon = Photon(self.layerObj, rSpecular)
+            photon.run_one_photon(self)          
             
 
  
@@ -304,8 +324,8 @@ class Photon:
         # In_Ptr is the input parameters.
 
         layer = self.layer
-        mua = model.layerObj.layer[layer].mua;
-        mus = model.layerObj.layer[layer].mus;
+        mua = model.layerObj.layer[layer].mua
+        mus = model.layerObj.layer[layer].mus
 
         if self.sleft == 0.0:      # make a new step
           rnd = np.random.random_sample()
@@ -370,7 +390,7 @@ class Photon:
             if np.random.random_sample() > r:   # transmitted to layer-1
                 if layer == 1:
                     self.uz = -uz1
-                    self.record_R(0.0, model)
+                    self.record_R(model, 0.0)
                     self.dead = True
                 else:
                     self.layer -= 1
@@ -414,12 +434,12 @@ class Photon:
                 self.uy *= ni/nt
                 self.uz = uz1
             else: 						# reflected
-                self.uz = -uz;
+                self.uz = -uz
         else:
             if np.random.random_sample() > r:	# transmitted to layer+1
                 if layer == model.layerObj.numLayers:
                     self.uz = uz1
-                    self.record_T(0.0, model)
+                    self.record_T(model, 0.0)
                     self.dead = True
                 else:
                     self.layer += 1
@@ -527,7 +547,7 @@ class Photon:
             self.uz = -sint*cosp*temp + uz*cost
 
 
-    def record_R(self, refl, model):
+    def record_R(self, model, refl):
         # Record the photon weight exiting the first layer(uz<0), 
         # no matter whether the layer is glass or not, to the 
         # reflection array.
@@ -536,9 +556,8 @@ class Photon:
         y = self.y
   
         ir = int((x*x + y*y)**0.5/model.dr)
-        irMax = int(model.nr - 1)
-        if ir > irMax:
-            ir = irMax
+        if ir > (model.nr - 1):
+            ir = (model.nr - 1)
   
         ia = int(np.arccos(-self.uz)/model.da) 
         if ia > (model.na - 1):
@@ -550,7 +569,7 @@ class Photon:
 
 
 
-    def record_T(self, refl, model):
+    def record_T(self, model, refl):
         # Record the photon weight exiting the last layer(uz>0), 
         # no matter whether the layer is glass or not, to the 
         # transmittance array.
@@ -560,16 +579,15 @@ class Photon:
         y = self.y
  
         ir = int((x*x + y*y)**0.5/model.dr)
-        irMax = int(model.nr - 1)
-        if ir > irMax:
-            ir = irMax
+        if ir > (model.nr - 1):
+            ir = model.nr - 1
   
         ia = int(np.arccos(self.uz)/model.da)
         if ia > (model.na - 1):
             ia = model.na - 1
   
         # assign photon to the transmittance array element.
-        model.Tt_ra[ir, ia] += self.w*(1.0-refl) 
+        model.Tt_ra[ir, ia] += self.w*(1.0 - refl) 
         self.w *= refl
 
 
