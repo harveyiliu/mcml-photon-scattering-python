@@ -99,7 +99,7 @@ class LayerStruct:
 
     def calc_r_specular(self):
         # direct reflections from the 1st and 2nd layers.
-        temp =(self.layer[0].n - self.layer[1].n)/(self.layer[0].n + \
+        temp = (self.layer[0].n - self.layer[1].n)/(self.layer[0].n + \
             self.layer[1].n)
         r1 = temp*temp
   
@@ -115,7 +115,6 @@ class LayerStruct:
 class ModelInput:
     """ModelInput class - multi-layered photon scattering model input
         Class instance variables:
-            numPhotons - number of photons to be traced
             Wth - play roulette if photon weight < Wth
             dz - z grid separation [cm]
             dr - r grid separation [cm]
@@ -128,7 +127,7 @@ class ModelInput:
             
     """
     
-    def __init__(self, modelName = 'BARE_DERMIS', numPhotonsSet = 1000):
+    def __init__(self, modelName = 'BARE_DERMIS'):
         if modelName.lower() == 'BARE_DERMIS'.lower():
             self.layerObj = LayerStruct('BARE_DERMIS')
             self.dz = 100e-4
@@ -150,7 +149,6 @@ class ModelInput:
             self.nz = 30
             self.nr = 50
             self.na = 10
-        self.numPhotons = numPhotonsSet
         self.Wth = WEIGHT
         self.da = 0.5*np.pi/self.na
 
@@ -176,11 +174,12 @@ class MCMLModel(ModelInput):
             
     """
 
-    def __init__(self, modelName = 'BARE_DERMIS', numPhotonsSet = 1000):
+    def __init__(self, modelName = 'BARE_DERMIS'):
         # extend the ModelInput base class instance variables
-        ModelInput.__init__(self, modelName, numPhotonsSet)
+        ModelInput.__init__(self, modelName)
+        self.numPhotons = 0
         # initialize the model grid arrays    
-        self.Rsp = 0.0
+        self.Rsp = self.layerObj.calc_r_specular()
         self.Rd = 0.0
         self.A = 0.0
         self.Tt = 0.0
@@ -194,12 +193,158 @@ class MCMLModel(ModelInput):
         self.Tt_r = np.zeros(self.nr)
         self.Tt_a = np.zeros(self.na)
 
-    def do_one_run(self):
-        rSpecular = self.layerObj.calc_r_specular()
-        for i in range(self.numPhotons):
-            photon = Photon(self.layerObj, rSpecular)
-            photon.run_one_photon(self)          
-            
+    def do_one_run(self, numPhotons):
+        for i in range(numPhotons):
+            photon = Photon(self.layerObj, self.Rsp)
+            photon.run_one_photon(self)
+
+    def sum_scale_result(self):
+        # Get 1D & 0D results.
+        self.sum_2D_Rd()
+        self.sum_2D_A()
+        self.sum_2D_Tt()  
+        self.scale_Rd_Tt()
+        self.scale_A()
+
+
+    def sum_2D_Rd(self):
+        #	Get 1D array elements by summing the 2D array elements.
+        for ir in range(self.nr):
+            sum = 0.0
+            for ia in range(self.na):
+                sum += self.Rd_ra[ir, ia]
+            self.Rd_r[ir] = sum
+  
+        for ia in range(self.na):
+            sum = 0.0
+            for ir in range(self.nr):
+                sum += self.Rd_ra[ir, ia]
+            self.Rd_a[ia] = sum
+  
+        sum = 0.0
+        for ir in range(self.nr):
+            sum += self.Rd_r[ir]
+        self.Rd = sum
+
+
+    def iz_to_layer(self, iz):
+        # Return the index to the layer according to the index
+        # to the grid line system in z direction (Iz).
+        # Use the center of box.
+        i = 1     	# index to layer.
+        while ((iz+0.5)*self.dz >= self.layerObj.layerZ[i][1] and \
+            i < self.layerObj.numLayers):
+            i += 1
+  
+        return i
+
+
+    def sum_2D_A(self):
+        # Get 1D array elements by summing the 2D array elements.
+        for iz in range(self.nz):
+            sum = 0.0
+            for ir in range(self.nr):
+                sum += self.A_rz[ir, iz]
+            self.A_z[iz] = sum
+  
+        sum = 0.0
+        for iz in range(self.nz):
+            sum += self.A_z[iz]
+            self.A_l[self.iz_to_layer(iz)] += self.A_z[iz]
+
+        self.A = sum
+
+
+    def sum_2D_Tt(self):     
+        # Get 1D array elements by summing the 2D array elements.
+  
+        for ir in range(self.nr):
+            sum = 0.0
+            for ia in range(self.na):
+                sum += self.Tt_ra[ir, ia]
+            self.Tt_r[ir] = sum
+  
+        for ia in range(self.na):
+            sum = 0.0
+            for ir in range(self.nr):
+                sum += self.Tt_ra[ir, ia]
+            self.Tt_a[ia] = sum
+  
+        sum = 0.0
+        for ir in range(self.nr):
+            sum += self.Tt_r[ir]
+        self.Tt = sum            
+
+
+    def scale_Rd_Tt(self):
+        # Scale Rd and Tt properly.
+        # "a" stands for angle alpha.
+        # Scale Rd(r,a) and Tt(r,a) by
+        # (area perpendicular to photon direction)
+        # x(solid angle)x(No. of photons).
+        # or
+        # [2*PI*r*dr*cos(a)]x[2*PI*sin(a)*da]x[No. of photons]
+        # or
+        # [2*PI*PI*dr*da*r*sin(2a)]x[No. of photons]
+        # Scale Rd(r) and Tt(r) by
+        # (area on the surface)x(No. of photons).
+        # Scale Rd(a) and Tt(a) by
+        # (solid angle)x(No. of photons).
+
+        scale1 = 4.0*np.pi*np.pi*self.dr*np.sin(self.da/2)\
+          *self.dr*self.numPhotons
+
+        # The factor (ir+0.5)*sin(2a) to be added.
+
+        for ir in range(self.nr):  
+            for ia in range(self.na):
+                scale2 = 1.0/((ir+0.5)*np.sin(2.0*(ia+0.5)*self.da)*scale1)
+                self.Rd_ra[ir, ia] *= scale2
+                self.Tt_ra[ir, ia] *= scale2
+  
+        scale1 = 2.0*np.pi*self.dr*self.dr*self.numPhotons  
+        # area is 2*PI*[(ir+0.5)*dr]*dr. 
+        # ir+0.5 to be added. */
+
+        for ir in range(self.nr):
+            scale2 = 1.0/((ir+0.5)*scale1)
+            self.Rd_r[ir] *= scale2
+            self.Tt_r[ir] *= scale2
+  
+        scale1  = 2.0*np.pi*self.da*self.numPhotons
+        # solid angle is 2*PI*sin(a)*da. sin(a) to be added.
+
+        for ia in range(self.na):
+            scale2 = 1.0/(np.sin((ia+0.5)*self.da)*scale1)
+            self.Rd_a[ia] *= scale2
+            self.Tt_a[ia] *= scale2
+  
+        scale2 = 1.0/self.numPhotons
+        self.Rd *= scale2
+        self.Tt *= scale2
+
+
+    def scale_A(self):
+        # Scale absorption arrays properly.
+        # Scale A_rz.
+        scale1 = 2.0*np.pi*self.dr*self.dr*self.dz*self.numPhotons	
+        # volume is 2*pi*(ir+0.5)*dr*dr*dz.*/ 
+        # ir+0.5 to be added.
+        for iz in range(self.nz):
+            for ir in range(self.nr):
+                self.A_rz[ir, iz] /= (ir+0.5)*scale1
+  
+        # Scale A_z.
+        scale1 = 1.0/(self.dz*self.numPhotons)
+        for iz in range(self.nz):
+            self.A_z[iz] *= scale1
+  
+        # Scale A_l. Avoid int/int.
+        scale1 = 1.0/self.numPhotons	
+        for il in range(self.layerObj.numLayers+2):
+            self.A_l[il] *= scale1
+  
+        self.A *=scale1;
 
  
 
@@ -247,6 +392,7 @@ class Photon:
     def run_one_photon(self, model):
         while self.dead == False:
             self.hop_drop_spin(model)
+        model.numPhotons += 1
 
 
     def hop_drop_spin(self, model):
