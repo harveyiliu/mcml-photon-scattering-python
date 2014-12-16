@@ -344,7 +344,7 @@ class MCMLModel(ModelInput):
         for il in range(self.layerObj.numLayers+2):
             self.A_l[il] *= scale1
   
-        self.A *=scale1;
+        self.A *=scale1
 
  
 
