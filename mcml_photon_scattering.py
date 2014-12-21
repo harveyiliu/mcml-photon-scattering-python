@@ -25,17 +25,42 @@ class Medium:
             self.n = 1.0
             self.mua = 0.0
             self.mus = 0.0
-            self.g = 0.0
-        elif mediumName.lower() == 'DERMIS'.lower():
+            self.g = 1.0
+        elif mediumName.lower() == 'DERMIS'.lower():    # 800-nm wavelngth
             self.n = 1.4
             self.mua = 0.26
             self.mus = 137.0
             self.g = 0.90
-        elif mediumName.lower() == 'TYPE_II_EPIDERMIS'.lower():
+        elif mediumName.lower() == 'TYPE_II_EPIDERMIS'.lower(): # 800-nm
             self.n = 1.3
             self.mua = 5.0
             self.mus = 200.0
-            self.g = 0.70    
+            self.g = 0.70
+        elif mediumName.lower() == 'CORNEA'.lower():    # 1060-nm
+            self.n = 1.376
+            self.mua = 0.157    # from Bovine NIR paper 2011
+            self.mus = 1.064
+            self.g = 0.90
+        elif mediumName.lower() == 'AQUEOUS_HUMOR'.lower():    # 1060-nm
+            self.n = 1.336
+            self.mua = 0.78     # from Optical properties of ocular tissues
+            self.mus = 0.60
+            self.g = 0.99
+        elif mediumName.lower() == 'LENS'.lower():    # 1060-nm
+            self.n = 1.406
+            self.mua = 0.206     # from Bovine NIR paper 2011
+            self.mus = 1.131
+            self.g = 0.90
+        elif mediumName.lower() == 'VITREOUS_HUMOR'.lower():    # 1060-nm
+            self.n = 1.337
+            self.mua = 0.48     # from Optical properties of ocular tissues
+            self.mus = 0.25
+            self.g = 0.99
+        elif mediumName.lower() == 'RETINA'.lower():    # 1060-nm
+            self.n = 1.358
+            self.mua = 2.745     # from Bovine NIR paper 2011
+            self.mus = 71.50
+            self.g = 0.70
         else:
             self.n = 1.4
             self.mua = 0.26
@@ -67,6 +92,17 @@ class LayerStruct:
             self.layer = [Medium('AIR'), Medium('TYPE_II_EPIDERMIS'), \
                 Medium('DERMIS'), Medium('DERMIS')]
             self.layerThickness = [0.006, 0.3]    # in [cm]
+        elif layerName.lower() == 'CORNEA'.lower():
+            self.numLayers = 1  # number of layers
+            self.layer = [Medium('AIR'), Medium('CORNEA'), \
+                Medium('AQUEOUS_HUMOR')]
+            self.layerThickness = [0.0449]    # in [cm]
+        elif layerName.lower() == 'EYE_ANTERIOR'.lower():
+            self.numLayers = 3  # number of layers
+            self.layer = [Medium('AIR'), Medium('CORNEA'), \
+                Medium('AQUEOUS_HUMOR'), Medium('LENS'), \
+                Medium('VITREOUS_HUMOR')]
+            self.layerThickness = [0.0449, 0.2794, 0.4979]    # in [cm]
         else:
             self.numLayers = 1
             self.layer = [Medium('AIR'), Medium('DERMIS'), Medium('DERMIS')]
@@ -141,6 +177,20 @@ class ModelInput:
             self.dr = 20e-4
             self.nz = 10
             self.nr = 50
+            self.na = 10
+        elif modelName.lower() == 'CORNEA'.lower():
+            self.layerObj = LayerStruct('CORNEA')
+            self.dz = 10e-4
+            self.dr = 10e-4
+            self.nz = 50
+            self.nr = 50
+            self.na = 10
+        elif modelName.lower() == 'EYE_ANTERIOR'.lower():
+            self.layerObj = LayerStruct('EYE_ANTERIOR')
+            self.dz = 10e-4
+            self.dr = 20e-4
+            self.nz = 200
+            self.nr = 100
             self.na = 10 
         else:
             self.layerObj = LayerStruct('BARE_DERMIS')

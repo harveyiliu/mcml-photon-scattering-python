@@ -8,6 +8,7 @@ if __name__ == "__main__":
                 modelName = predefined model name, current set of models are:
                     1. BARE_DERMIS (800-nm) - default
                     2. TYPE_II_SKIN (800-nm)
+                    3. CORNEA (1060-nm)
                 N = number of photons to be used in the Monte-Carlo simulation
         Run command example:
             ./mcml_photon_scattering_demo.py TYPE_II_SKIN 1000 &      
