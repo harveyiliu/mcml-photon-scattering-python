@@ -182,15 +182,15 @@ class ModelInput:
             self.layerObj = LayerStruct('CORNEA')
             self.dz = 10e-4
             self.dr = 10e-4
-            self.nz = 50
+            self.nz = 100
             self.nr = 50
             self.na = 10
         elif modelName.lower() == 'EYE_ANTERIOR'.lower():
             self.layerObj = LayerStruct('EYE_ANTERIOR')
-            self.dz = 10e-4
+            self.dz = 20e-4
             self.dr = 20e-4
-            self.nz = 200
-            self.nr = 100
+            self.nz = 500
+            self.nr = 250
             self.na = 10 
         else:
             self.layerObj = LayerStruct('BARE_DERMIS')
