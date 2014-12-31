@@ -202,6 +202,7 @@ class MCMLConv(ConvInput):
         self.A_rzc = np.matrix(np.zeros((self.nrc, self.mcmlModel.nz)))
         self.Tt_rac = np.matrix(np.zeros((self.nrc, self.mcmlModel.na)))
         self.Tt_rc = np.zeros(self.nrc)
+        self.F_rzc = np.matrix(np.zeros((self.nrc, self.mcmlModel.nz)))
 
     
     def run_conv(self):
@@ -210,6 +211,7 @@ class MCMLConv(ConvInput):
         self.conv_A_rz()
         self.conv_Tt_ra()
         self.conv_Tt_r()
+        self.conv_A2F()
 
     
     def conv_Rd_ra(self):
@@ -279,7 +281,6 @@ class MCMLConv(ConvInput):
                         *Gauss_integration(Tt_ra_FG_integrand, self)
 
 
-
     def conv_Tt_r(self):
         P = self.beam.P
         R = self.beam.R
@@ -292,6 +293,47 @@ class MCMLConv(ConvInput):
             else	:       # Gaussian
                 self.Tt_rc[irc] = 4*P/(R*R) \
                     *Gauss_integration(Tt_r_FG_integrand, self)
+
+    def conv_A2F(self):
+        nz = self.mcmlModel.nz
+        for ir in range(self.nrc):
+            for iz in range(nz):
+                mua = self.mcmlModel.layerObj.layer[self.iz_to_layer(iz)].mua
+                if (mua > 0.0):
+	                self.F_rzc[ir, iz] = self.A_rzc[ir, iz]/mua     # F in J/cm2
+
+
+    def iz_to_layer(self, iz):
+        i = 1       # index to layer
+        numLayers = self.mcmlModel.layerObj.numLayers
+        dz = self.mcmlModel.dz
+        while ((iz + 0.5)*dz >= self.mcmlModel.layerObj.layerZ[i][1] \
+                and i < numLayers):
+            i += 1
+        return i
+
+    
+    def center_half_max_depth(self):
+        nz = self.mcmlModel.nz
+        dz = self.mcmlModel.dz
+        depth = 0
+        for iz in range(nz):
+            if self.F_rzc[0, iz] <= 0.5*self.F_rzc[0, 0]:
+                depth = (iz + 0.5)*dz
+                break
+        return depth
+
+
+    def surface_half_max_width(self):
+        width = 0
+        for irc in range(self.nrc):
+            if self.F_rzc[irc, 0] <= 0.5*self.F_rzc[0, 0]:
+                width = 2*(irc + 0.5)*self.drc
+                break
+        return width    
+            
+
+      
 
 
 def I_theta(r, r2, R):
@@ -400,7 +442,7 @@ def A_rz_interp(r2, mcmlConv):
 def Rd_ra_FG_integrand(r2, mcmlConv):
     # Convolution integrand for either flat or gaussian beams.
     # See comments for A_rzFGIntegrand().
-    # r" in the integration. */
+    # r" in the integration.
 
     RT_ra = mcmlConv.mcmlModel.Rd_ra
     Rd_at_r2 = RT_ra_interp(r2, RT_ra, mcmlConv)
@@ -433,7 +475,7 @@ def Rd_r_FG_integrand(r2, mcmlConv):
     Rd_at_r2 = RT_r_interp(r2, RT_r, mcmlConv)
     R = mcmlConv.beam.R
     r = mcmlConv.convVar.r
-    if mcmlConv.beam.type.lower() == 'flat'.lower():
+    if mcmlConv.beam.type.lower() == 'FLAT'.lower():
         f = Rd_at_r2*I_theta(r, r2, R)*r2
     else	:       # Gaussian
         f = Rd_at_r2*exp_Bess_I0(r, r2, R)*r2
@@ -476,7 +518,7 @@ def A_rz_FG_integrand(r2, mcmlConv):
 def Tt_ra_FG_integrand(r2, mcmlConv):
 # Convolution integrand for either flat or gaussian beams.
 # See comments for A_rzFGIntegrand().
-# r" in the integration. */
+# r" in the integration.
 
     TT_ra = mcmlConv.mcmlModel.Tt_ra
     Tt_at_r2 = RT_ra_interp(r2, TT_ra, mcmlConv)
@@ -526,7 +568,8 @@ def flat_integration(func, mcmlConv):
     if (a >= b):
         return 0
     else:
-        return integrate.quad(func, a, b, args=(mcmlConv,))[0]
+        return integrate.quad(func, a, b, args=(mcmlConv,), \
+            epsabs=1.0e-5, epsrel=1.0e-5, limit=500)[0]
 
 
 
@@ -544,7 +587,8 @@ def Gauss_integration(func, mcmlConv):
     if (a >= b):
         return 0
     else:
-        return integrate.quad(func, a, b, args=(mcmlConv,))[0]
+        return integrate.quad(func, a, b, args=(mcmlConv,), \
+            epsabs=1.0e-5, epsrel=1.0e-5, limit=500)[0]
 
 
             

@@ -27,13 +27,16 @@ if __name__ == "__main__":
     model.do_one_run(N)
     model.sum_scale_result()
     print '\nPhoton number: {0:d}'.format(model.numPhotons)
-    print 'Rsp: {0:.3f}'.format(model.Rsp)
-    print 'Rd: {0:.3f}'.format(model.Rd)
-    print 'A: {0:.3f}'.format(model.A)
-    print 'Tt: {0:.3f}'.format(model.Tt)
+    print 'Specular reflection Rsp (%): {0:.2f}'.format(100*model.Rsp)
+    print 'Diffused reflection Rd (%): {0:.2f}'.format(100*model.Rd)
+    print 'Absorption A (%): {0:.2f}'.format(100*model.A)
+    print 'Transmission Tt (%): {0:.2f}'.format(100*model.Tt)
     
     mcmlConv = conv.MCMLConv(model, convName)
     mcmlConv.run_conv()
+    halfMaxDepth = mcmlConv.center_half_max_depth()
+    halfMaxWidth = mcmlConv.surface_half_max_width()
+    print '\nCenter half max depth (mm): {0:.3f}'.format(10*halfMaxDepth)
+    print 'Surface half max width (mm): {0:.2f}'.format(10*halfMaxWidth)
 
-    print 'Convolution complete.'
     
