@@ -19,20 +19,10 @@ class Beam:
             
     """
     
-    def __init__(self, beamName = 'TRIA_HRL'):
-        if beamName.lower() == 'TRIA_HRL'.lower():
-            self.type = 'FLAT'
-            self.P = 20     # total power. [J or W]
-            self.R = 0.5    # radius. [cm]
-        elif beamName.lower() == 'TRIA_FAN'.lower():
-            self.type = 'GAUSSIAN'
-            self.P = 0.012      # total power. [J or W]
-            self.R = 0.025      # radius. [cm]
-        else:
-            self.type = 'FLAT'
-            self.P = 20     # total power. [J or W]
-            self.R = 0.5    # radius. [cm]
-
+    def __init__(self):
+        self.type = None
+        self.P = 0
+        self.R = 0
 
 
 class Node:
@@ -147,22 +137,21 @@ class ConvInput:
             
     """
     
-    def __init__(self, mcmlModel, convName = 'TRIA_HRL'):
-        if convName.lower() == 'TRIA_HRL'.lower():
-            self.beam = Beam('TRIA_HRL')    # incident beam of finite size
-            self.drc = 0.005        # convolution r grid separation.[cm]
-            self.nrc = 150          # convolution array range 0..nrc-1.
-               
-        elif convName.lower() == 'TRIA_FAN'.lower():
-            self.beam = Beam('TRIA_FAN')
-            self.drc = 0.001
-            self.nrc = 100 
+    def __init__(self, mcmlModel, beamType = 'FLAT', P = 1, R = 0):
+        self.beam = Beam()
+        if beamType.lower() == 'FLAT'.lower():
+            self.beam.type = 'FLAT'      # incident beam of finite size
+        elif beamType.lower() == 'GAUSSIAN'.lower():
+            self.beam.type = 'GAUSSIAN' 
         else:
-            self.beam = Beam('TRIA_HRL')
-            self.drc = 0.005
-            self.nrc = 200
+            self.beam.type = 'FLAT'
         self.mcmlModel = mcmlModel
         self.convVar = ConvVar()
+        self.beam.P = P
+        self.beam.R = np.maximum(R, 1e-5)       # minimum radius required
+        minR = 1.2*(R + mcmlModel.nr*mcmlModel.dr)
+        self.drc = np.maximum(mcmlModel.dr, minR/200)
+        self.nrc = int(minR/self.drc)
             
 
 
@@ -193,9 +182,9 @@ class MCMLConv(ConvInput):
             
     """
 
-    def __init__(self, mcmlModel, convName = 'TRIA_HRL'):
+    def __init__(self, mcmlModel, beamType = 'FLAT', P = 1, R = 0):
         # extend the ConvInput base class instance variables
-        ConvInput.__init__(self, mcmlModel, convName)
+        ConvInput.__init__(self, mcmlModel, beamType, P, R)
         # initialize the model grid arrays    
         self.Rd_rac = np.matrix(np.zeros((self.nrc, self.mcmlModel.na)))
         self.Rd_rc = np.zeros(self.nrc)
@@ -296,21 +285,13 @@ class MCMLConv(ConvInput):
 
     def conv_A2F(self):
         nz = self.mcmlModel.nz
-        for ir in range(self.nrc):
+        for irc in range(self.nrc):
             for iz in range(nz):
-                mua = self.mcmlModel.layerObj.layer[self.iz_to_layer(iz)].mua
+                mua = self.mcmlModel.get_mua_at_iz(iz)
                 if (mua > 0.0):
-	                self.F_rzc[ir, iz] = self.A_rzc[ir, iz]/mua     # F in J/cm2
+                    self.F_rzc[irc, iz] = self.A_rzc[irc, iz]/mua   # F in J/cm2
 
 
-    def iz_to_layer(self, iz):
-        i = 1       # index to layer
-        numLayers = self.mcmlModel.layerObj.numLayers
-        dz = self.mcmlModel.dz
-        while ((iz + 0.5)*dz >= self.mcmlModel.layerObj.layerZ[i][1] \
-                and i < numLayers):
-            i += 1
-        return i
 
     
     def center_half_max_depth(self):
@@ -350,12 +331,34 @@ def I_theta(r, r2, R):
 
 
 
+
+def modified_Bess_I0(x):
+# Modified Bessel function exp(-x) I0(x), for x >=0.
+# We modified from the original bessi0(). Instead of
+# I0(x) itself, it returns I0(x) exp(-x).
+
+    ax = np.fabs(x)
+    if ax < 3.75:
+        y = x/3.75
+        y *= y
+        ans = np.exp(-ax)*(1.0 + y*(3.5156229 + y*(3.0899424 + y*(1.2067492 \
+            + y*(0.2659732 + y*(0.360768e-1 + y*0.45813e-2))))))
+    else:
+        y = 3.75/ax
+        ans = (1/(ax**0.5))*(0.39894228 + y*(0.1328592e-1 \
+            + y*(0.225319e-2 + y*(-0.157565e-2 + y*(0.916281e-2 \
+            + y*(-0.2057706e-1 + y*(0.2635537e-1 + y*(-0.1647633e-1 \
+            + y * 0.392377e-2))))))))
+    return ans
+
+
+
 def exp_Bess_I0(r, r2, R):
     _RR = 1/(R*R)
     x = 4*r*r2*_RR
     y = 2*(r2*r2 + r*r)*_RR
-    expbess = np.exp(-y + x)*np.i0(x)
-    return (expbess)
+    expbess = np.exp(-y + x)*modified_Bess_I0(x)
+    return expbess
 
 
 def RT_ra_interp(r2, RT_ra, mcmlConv):
@@ -569,7 +572,7 @@ def flat_integration(func, mcmlConv):
         return 0
     else:
         return integrate.quad(func, a, b, args=(mcmlConv,), \
-            epsabs=1.0e-5, epsrel=1.0e-5, limit=500)[0]
+            epsabs=1.0e-4, epsrel=1.0e-5, limit=500)[0]
 
 
 
@@ -588,7 +591,7 @@ def Gauss_integration(func, mcmlConv):
         return 0
     else:
         return integrate.quad(func, a, b, args=(mcmlConv,), \
-            epsabs=1.0e-5, epsrel=1.0e-5, limit=500)[0]
+            epsabs=1.0e-4, epsrel=1.0e-5, limit=500)[0]
 
 
             

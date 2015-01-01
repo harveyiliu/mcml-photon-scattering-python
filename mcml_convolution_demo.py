@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import mcml_photon_scattering as mcml
 import mcml_convolution as conv
+import time
 
 
 if __name__ == "__main__":
@@ -12,17 +13,24 @@ if __name__ == "__main__":
                     3. CORNEA (1060-nm)
                     4. EYE_ANTERIOR (1060-nm)
                 N = number of photons to be used in the Monte-Carlo simulation
-                convName = predefined beam convolution system name,
-                    1. TRIA_HRL
-                    2. TRIA_FAN
+                beamType = predefined beam type,
+                    1. FLAT
+                    2. GAUSSIAN
+                P = incident beam power/energy (W or J)
+                W = beam width (mm)
         Run command example:
-            ./mcml_convolution_demo.py TYPE_II_SKIN 1000 TRIA_HRL &      
+            ./mcml_convolution_demo.py BARE_DERMIS 1000 FLAT 1.0 10.0 &      
     """
     
     import sys
     modelName = sys.argv[1]     # MCML model name
     N = int(sys.argv[2])        # number of photons used for Monte-Carlo
-    convName = sys.argv[3]      # convolution system name
+    beamType = sys.argv[3]      # beam type
+    P = float(sys.argv[4])      # beam power/energy [W or J]
+    W = float(sys.argv[5])      # beam width [mm]
+    R = 0.1*W/2                 # beam radius [cm]
+    
+    timeStart = time.time()
     model = mcml.MCMLModel(modelName)
     model.do_one_run(N)
     model.sum_scale_result()
@@ -32,11 +40,13 @@ if __name__ == "__main__":
     print 'Absorption A (%): {0:.2f}'.format(100*model.A)
     print 'Transmission Tt (%): {0:.2f}'.format(100*model.Tt)
     
-    mcmlConv = conv.MCMLConv(model, convName)
+    mcmlConv = conv.MCMLConv(model, beamType, P, R)
     mcmlConv.run_conv()
     halfMaxDepth = mcmlConv.center_half_max_depth()
     halfMaxWidth = mcmlConv.surface_half_max_width()
+    timeElapse = (time.time() - timeStart)/60   # total runtime in [min.]
     print '\nCenter half max depth (mm): {0:.3f}'.format(10*halfMaxDepth)
     print 'Surface half max width (mm): {0:.2f}'.format(10*halfMaxWidth)
+    print 'Total run time (min.): {0:.2f}'.format(timeElapse)
 
     

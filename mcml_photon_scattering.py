@@ -396,6 +396,17 @@ class MCMLModel(ModelInput):
   
         self.A *=scale1
 
+
+
+    def get_mua_at_iz(self, iz):
+        i = 1       # index to layer
+        numLayers = self.layerObj.numLayers
+        dz = self.dz
+        while ((iz + 0.5)*dz >= self.layerObj.layerZ[i][1] and i < numLayers):
+            i += 1
+        mua = self.layerObj.layer[i].mua
+        return mua
+
  
 
 class Photon:
