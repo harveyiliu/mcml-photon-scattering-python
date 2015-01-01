@@ -44,9 +44,9 @@ if __name__ == "__main__":
     mcmlConv.run_conv()
     halfMaxDepth = mcmlConv.center_half_max_depth()
     halfMaxWidth = mcmlConv.surface_half_max_width()
-    timeElapse = (time.time() - timeStart)/60   # total runtime in [min.]
+    runTime = time.time() - timeStart   # total runtime in [sec.]
     print '\nCenter half max depth (mm): {0:.3f}'.format(10*halfMaxDepth)
-    print 'Surface half max width (mm): {0:.2f}'.format(10*halfMaxWidth)
-    print 'Total run time (min.): {0:.2f}'.format(timeElapse)
+    print 'Surface half max width (mm): {0:.3f}'.format(10*halfMaxWidth)
+    print 'Total run time (min.): {0:.2f}'.format(runTime/60)
 
     
